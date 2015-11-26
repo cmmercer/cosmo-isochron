@@ -130,12 +130,12 @@ if tags[np.where(tags[:,0]=='error_ellipses')[0][0],1] == 1:
           dims[i,1] = np.sqrt(max(vals))
     phi = np.degrees(np.arctan(2.0*Sxy/(np.power(Sx,2)-np.power(Sy,2)))/2.0)
 
-        
     #Plot the data with error ellipses.
     fig = p.figure(1)
     ax = p.gca()
-    #First plot data with alternate appearance.
     zid = 1
+    
+    #First plot data with alternate appearance.
     for i in range(len(plotData[:,0])):
         try:
             if i in tags[np.where(tags[:,0]=='alt_list')[0][0],1]:
@@ -179,7 +179,7 @@ if tags[np.where(tags[:,0]=='error_ellipses')[0][0],1] == 1:
                        mec=tags[np.where(tags[:,0]=='ind_color')[0][0],1],\
                        ms=tags[np.where(tags[:,0]=='ind_size')[0][0],1],zorder=zid)
             zid += 1
-    
+
     #Then plot data with normal appearance.
     for i in range(len(plotData[:,0])):
         try:
