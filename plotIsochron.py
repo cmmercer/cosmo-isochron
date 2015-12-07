@@ -18,7 +18,8 @@ from scipy.stats import norm
 from matplotlib.patches import Ellipse
 #Make text labels text boxes rather than character paths.
 mpl.rcParams['pdf.fonttype'] = 'truetype'
-mpl.rc('font',family='serif',serif='Times New Roman') #Times New Roman
+#mpl.rc('font',family='serif',serif='Times New Roman') #Times New Roman
+mpl.rc('font',family='sans-serif',serif='Arial')
 #Make plot frames and ticks thicker.
 mpl.rcParams['axes.linewidth'] = 1.5
 mpl.rcParams['xtick.major.size'] = 6
