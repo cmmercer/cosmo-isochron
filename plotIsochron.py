@@ -46,11 +46,14 @@ elif len(sys.argv) == 4:  #Expecting 3 arguments plus plotRS itself (argv[0]), h
 f = open(dFile,'rU')  #The 'rU' opens file with read permissions, universal line endings (\n or \r).
 reader = csv.reader(f,delimiter='\t')
 plotData = np.array(np.zeros((1,5)),dtype='d')
+ids = []
 #Read file into plotData. Note, ignoring column names
 for idx, row in enumerate(reader):
   if idx == 1:
+    ids.append(row[0])
     plotData = np.array([row[1],row[2],row[3],row[4],row[5]]) #Ignore point labels for now, just get data.
   elif idx > 1:
+    ids.append(row[0])
     plotData = np.vstack((plotData,np.array([row[1],row[2],row[3],row[4],row[5]])))
 #Close plot data file now that data are ingested. Convert plotData to doubles.
 f.close()
@@ -141,7 +144,7 @@ def plot_alt_errEllipses(zid):
   # Plot data with alternate appearance.
   for i in range(len(plotData[:,0])):
     try:
-      if i in tags[np.where(tags[:,0]=='alt_list')[0][0],1]:
+      if ids[i] in tags[np.where(tags[:,0]=='alt_list')[0][0],1]:
         ellFace = Ellipse(xy=(plotData[i,0],plotData[i,2]),width=2*dims[i,0],height=2*dims[i,1],\
                           angle=phi[i],facecolor=tags[np.where(tags[:,0]=='alt_color')[0][0],1],\
                           edgecolor='none',alpha=tags[np.where(tags[:,0]=='ellipse_alpha')[0][0],1],\
