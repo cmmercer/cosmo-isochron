@@ -138,7 +138,7 @@ if tags[np.where(tags[:,0]=='error_ellipses')[0][0],1] == 1:
       dims[i,0] = np.sqrt(min(vals))
       dims[i,1] = np.sqrt(max(vals))
     phi = np.degrees(np.arctan(2.0*Sxy/(np.power(Sx,2)-np.power(Sy,2)))/2.0)
-    
+
 # Define convenience function for plotting alternate error ellipses.
 def plot_alt_errEllipses(zid):
   # Plot data with alternate appearance.
