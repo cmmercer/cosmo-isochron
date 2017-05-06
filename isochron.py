@@ -74,19 +74,22 @@ def extractData(ds,indexes=[0,1,2,3,4],selcol=None,selval=None,exclude=None):
       if ds.iloc[i,sci] in selval:
         idx.append(i)
   # Make sure specified records are excluded.
-  if exclude is None:
+  if exclude is not None:
+    pidx = idx
+    idx = []
     if not isinstance(exclude,list):
       exclude = [exclude]
-    for i in range(len(idx)):
-      if ds.index[idx[i]] not in exclude:
-        idx.append(idx[i])
+    for i in range(len(pidx)):
+      if ds.index[pidx[i]] not in exclude:
+        idx.append(pidx[i])
   # Extract data.
   x = ds.iloc[idx,indexes[0]].as_matrix()
   sx = ds.iloc[idx,indexes[1]].as_matrix()
   y = ds.iloc[idx,indexes[2]].as_matrix()
   sy = ds.iloc[idx,indexes[3]].as_matrix()
   rho = ds.iloc[idx,indexes[4]].as_matrix()
-  return [x,sx,y,sy,rho]
+  ids = list(ds.index[idx])
+  return [x,sx,y,sy,rho,ids]
 
 # Returns: (ax, zid, fig)
 def initPlot():
@@ -108,7 +111,7 @@ def plotData(ax,data,zid,scale_unc=2.0,fc='#999999',ec='#666666'):
   Returns: zid
   '''
   # Unpack plot data.
-  (x,sx,y,sy,rho) = unpackData(data)
+  (x,sx,y,sy,rho) = unpackData(data,5)
   # Scale uncertainties.
   sx = scale_unc*sx
   sy = scale_unc*sy
@@ -134,13 +137,20 @@ def plotData(ax,data,zid,scale_unc=2.0,fc='#999999',ec='#666666'):
   p.show()
   return zid
 
-def unpackData(data):
+def unpackData(data,n):
   '''
   Unpacks the 2D matrix of data returned by the extractData function.
 
-  Returns: (x,sx,y,sy,rho)
+  Arguments:
+  - data - The matrix of data from which to unpack objects.
+  - n    - The number of objects to unpack, from left to right.
+
+  Returns: a tuple with n objects.
   '''
-  return (data[0], data[1], data[2], data[3], data[4])
+  if n > len(data)+1:
+    print 'Error: n is greater than len(data).'
+    return
+  return tuple(data[0:n])
 
 # Define convenience functions for plotting regular error ellipses.
 def plot_errEllipses(ax,x,sx,y,sy,rho,dims,phi,zid,fc='#999999',ec='#666666'):
@@ -218,7 +228,7 @@ def plotEnvelope(ax,a,sa,b,sb,zid,level=2,color='#999999'):
 # Returns: (a,sa,b,sb)
 def yorkRegression(data):
   # Unpack data.
-  (x,sx,y,sy,rho) = unpackData(data)
+  (x,sx,y,sy,rho) = unpackData(data,5)
   # Weights.
   wX, wY = 1/sx**2, 1/sy**2
   # Guess initial slope with simple least-squares regression.
@@ -288,3 +298,108 @@ def iterativeSolver(x,y,wX,wY,rho,b):
     newB = sumWBV/sumWBU
   # Return results.
   return (newB, capW, capX, capY, betaI, icount)
+
+# --------------------------------------------------------------------------------
+# Descriptive statistics functions.
+
+def print_stats(data,reg_results):
+  '''
+  Displays the specified regression results with some descriptive statistics.
+  '''
+  (x,sx,y,sy,rho) = unpackData(data,5)
+  a,sa,b,sb = reg_results[0], reg_results[1], reg_results[2], reg_results[3]
+  (mswd,smswd) = mswd_2d(x,sx,y,sy,a,b)
+  r2 = calc_r2(x,y)
+  print '{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}'.format('a','sa','b','sb','mswd','1s mswd','r2','n')
+  print '{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:10d}'.format(a,sa,b,sb,mswd,smswd,r2,len(x))
+
+def calc_r2(x,y):
+  '''
+  Returns the square of sample correlation coefficient, i.e., r**2.
+  '''
+  if len(x) != len(y):
+    print 'Error: input arrays must be the same length'
+    return
+  sxx, syy, sxy = 0.0, 0.0, 0.0
+  xm, ym = np.mean(x), np.mean(y)
+  for i in range(len(x)):
+    sxx += (x[i] - xm)**2
+    syy += (y[i] - ym)**2
+    sxy += (x[i] - xm)*(y[i] - ym)
+  return (sxy/np.sqrt(sxx*syy))**2
+
+def mswd_2d(x,sx,y,sy,a,b):
+  '''
+  Determines the MSWD for a line with intercept a and slope b that was fit to the
+  specified data (x,sx,y,sy).
+
+  Arguments:
+  - x, sx - Data and uncertainties on the abscissa.
+  - y, sy - Data and uncertainties on the ordinate.
+  - a, b  - intercept and slope of the best fit line, y = a + bx.
+
+  Returns: (mswd, smswd)
+  '''
+  # Check inputs.
+  if len(x) != len(sx) or len(x) != len(y) or len(x) != len(sy):
+    print 'Error: input arrays must be the same length'
+    return
+  # Calculate MSWD.
+  n = len(x)
+  mswd = 0
+  terms = np.zeros(n)
+  for i in range(n):
+    terms[i] = (y[i] - a - b*x[i])**2/(sy[i]**2 + (b*sx[i])**2)
+  mswd = sum(terms)/(n-2)
+  return (mswd,np.sqrt(2.0/(n-2)))
+
+# --------------------------------------------------------------------------------
+# Outlier identifier(s) and related methods.
+
+# weighted_oli_2d convenience method.
+def weighted_oli_2d(data,york_res,cutoff=4.0):
+  '''
+  Applies the Hampel outlier identifier to the weighted residuals (chi**2 values)
+  of the data from the specified York regression results.
+  '''
+  idx = hampel(chi2_2d(data,york_res),cutoff)
+  oli = []
+  for i in idx:
+    oli.append(data[5][i])
+  return oli
+
+# Determine chi squared values for regression results.
+# chi2_2d
+def chi2_2d(data,york_res):
+  '''
+  Determines the weighted residuals (chi**2 values) of the data from the
+  specified York regression results.
+  '''
+  # Unpack data.
+  (x,sx,y,sy,rho) = unpackData(data,5)
+  (a,sa,b,sb) = unpackData(york_res,4)
+  n = len(x)
+  # Get weights for data, and model weights with error correlations.
+  wX, wY = 1.0/sx**2, 1.0/sy**2
+  capW = np.zeros(n)
+  for i in range(n):
+    capW[i] = (wX[i]*wY[i])/(wX[i] + (b**2)*wY[i] - 2.0*b*rho[i]*np.sqrt(wX[i]*wY[i]))
+  return capW
+
+# Hampel.
+def hampel(values,cutoff=4.0):
+  '''
+  Applies the Hampel outlier identifier to the specified set of values.
+
+  Returns: a list of indexes of potential outliers, or an empty list if none were identified.
+  '''
+  # Calculate absolute deviations from the median, and scaled MADM value.
+  viMed = abs(values - np.median(values))
+  s = 1.4826*np.median(viMed)
+  # Identify potential outliers.
+  oli = viMed/s
+  idx = []
+  for i in range(len(oli)):
+    if oli[i] > cutoff:
+      idx.append(i)
+  return idx
