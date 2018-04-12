@@ -65,7 +65,7 @@ def extractData(ds,indexes=[0,1,2,3,4],selcol=None,selval=None,exclude=None):
   # Start with records meeting selection criteria.
   idx = []
   if selcol is None:
-    idx = range(len(ds))
+    idx = list(range(len(ds)))
   else:
     sci = list(ds.columns).index(selcol)
     if not isinstance(selval,list):
@@ -148,7 +148,7 @@ def unpackData(data,n):
   Returns: a tuple with n objects.
   '''
   if n > len(data)+1:
-    print 'Error: n is greater than len(data).'
+    print('Error: n is greater than len(data).')
     return
   return tuple(data[0:n])
 
@@ -275,7 +275,7 @@ def iterativeSolver(x,y,wX,wY,rho,b):
     oldB = newB
     # Check iteration limit.
     if icount > maxIter:
-      print 'York regression failed to converge.'
+      print('York regression failed to converge.')
       return
     # Initialize sum values.
     sumCapWX, sumCapWY, sumCapW, sumWBV, sumWBU = 0.0, 0.0, 0.0, 0.0, 0.0
@@ -310,15 +310,15 @@ def print_stats(data,reg_results):
   a,sa,b,sb = reg_results[0], reg_results[1], reg_results[2], reg_results[3]
   (mswd,smswd) = mswd_2d(x,sx,y,sy,a,b)
   r2 = calc_r2(x,y)
-  print '{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}'.format('a','sa','b','sb','mswd','1s mswd','r2','n')
-  print '{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:10d}'.format(a,sa,b,sb,mswd,smswd,r2,len(x))
+  print('{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}'.format('a','sa','b','sb','mswd','1s mswd','r2','n'))
+  print('{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:10d}'.format(a,sa,b,sb,mswd,smswd,r2,len(x)))
 
 def calc_r2(x,y):
   '''
   Returns the square of sample correlation coefficient, i.e., r**2.
   '''
   if len(x) != len(y):
-    print 'Error: input arrays must be the same length'
+    print('Error: input arrays must be the same length')
     return
   sxx, syy, sxy = 0.0, 0.0, 0.0
   xm, ym = np.mean(x), np.mean(y)
@@ -342,7 +342,7 @@ def mswd_2d(x,sx,y,sy,a,b):
   '''
   # Check inputs.
   if len(x) != len(sx) or len(x) != len(y) or len(x) != len(sy):
-    print 'Error: input arrays must be the same length'
+    print('Error: input arrays must be the same length')
     return
   # Calculate MSWD.
   n = len(x)
@@ -456,4 +456,4 @@ def bootstrap_isochron(path,rej=[],level=2):
   zid = plotData(ax,pd,zid)
   print_stats(pd,res)
   for idi in pd[5]:
-    print idi
+    print(idi)
