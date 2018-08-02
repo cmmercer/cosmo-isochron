@@ -351,7 +351,7 @@ def print_stats(data,reg_results):
   '''
   (x,sx,y,sy,rho) = unpackData(data,5)
   a,sa,b,sb = reg_results[0], reg_results[1], reg_results[2], reg_results[3]
-  (mswd,smswd) = mswd_2d(x,sx,y,sy,a,b)
+  (mswd,smswd) = mswd_2d(x,sx,y,sy,rho,a,b)
   r2 = calc_r2(x,y)
   print('{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}'.format('a','sa','b','sb','mswd','1s mswd','r2','n'))
   print('{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:10d}'.format(a,sa,b,sb,mswd,smswd,r2,len(x)))
@@ -371,7 +371,7 @@ def calc_r2(x,y):
     sxy += (x[i] - xm)*(y[i] - ym)
   return (sxy/np.sqrt(sxx*syy))**2
 
-def mswd_2d(x,sx,y,sy,a,b):
+def mswd_2d(x,sx,y,sy,rho,a,b):
   '''
   Determines the MSWD for a line with intercept a and slope b that was fit to the
   specified data (x,sx,y,sy).
@@ -379,12 +379,13 @@ def mswd_2d(x,sx,y,sy,a,b):
   Arguments:
   - x, sx - Data and uncertainties on the abscissa.
   - y, sy - Data and uncertainties on the ordinate.
+  - rho   - Error correlation coefficients for data points.
   - a, b  - intercept and slope of the best fit line, y = a + bx.
 
   Returns: (mswd, smswd)
   '''
   # Check inputs.
-  if len(x) != len(sx) or len(x) != len(y) or len(x) != len(sy):
+  if len(x) != len(sx) or len(x) != len(y) or len(x) != len(sy) or len(x) != len(rho):
     print('Error: input arrays must be the same length')
     return
   # Calculate MSWD.
@@ -392,7 +393,7 @@ def mswd_2d(x,sx,y,sy,a,b):
   mswd = 0
   terms = np.zeros(n)
   for i in range(n):
-    terms[i] = (y[i] - a - b*x[i])**2/(sy[i]**2 + (b*sx[i])**2)
+    terms[i] = (y[i] - a - b*x[i])**2/(sy[i]**2 + (b*sx[i])**2 - 2*a*rho[i]*sx[i]*sy[i])
   mswd = sum(terms)/(n-2)
   return (mswd,np.sqrt(2.0/(n-2)))
 
