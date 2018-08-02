@@ -29,6 +29,49 @@ mpl.rcParams['xtick.major.width'] = 1
 mpl.rcParams['ytick.major.size'] = 6
 mpl.rcParams['ytick.major.width'] = 1
 
+# process function.
+def process(path,delim='\t',idx_col=0,indexes=[0,1,2,3,4],selcol=None,selval=None,exclude=None,run_oli=True,
+            xlimits=None,ylimits=None,cutoff=4.0):
+  '''
+  Reads the data from the specified file, runs a York regression, and plots the data.
+
+  Arguments:
+  - path    - The path to the datafile.
+  - delim   - The delimeter to use when reading the file; default = tab.
+  - idx_col - The column to make the DataFrame index; default = 0.
+  - indexes - The default selection indexes, in the order: [x,sx,y,sy,rho]; default => [0,1,2,3,4].
+  - selcol  - The name of a column that will be used to select data records.
+  - selval  - A list of values that qualify a data record to be selected.
+  - exclude - A list of items to exclude; these items must be values from the index
+              column of the specified Pandas DataFrame.
+  - xlimits, ylimits - plot domain and range, applied before regression is plotted. Must be two-element lists.
+  - cutoff  - Hampel cutoff.
+
+  Returns: the outliers, or None.
+  '''
+  ds = loadDataset(path,delim,idx_col)
+  dat = extractData(ds,indexes,selcol,selval,exclude)
+  res = yorkRegression(dat)
+  print('')
+  print_stats(dat,res)
+  print('')
+  (ax,zid,fig) = initPlot()
+  zid = plotData(ax,dat,zid)
+  if xlimits is not None:
+    p.xlim(xlimits)
+  if ylimits is not None:
+    p.ylim(ylimits)
+  zid = plotRegression(ax,res[0],res[2],zid)
+  oli = None
+  if run_oli:
+    oli = weighted_oli_2d(dat,res)
+    if oli is not None and len(oli) > 0:
+      print('\nOutliers detected!')
+      print(oli)
+    else:
+      print('\nNo outliers detected, huzzah!')
+  return oli
+
 # loadDataset function.
 def loadDataset(path,delim='\t',idx_col=0):
   '''
