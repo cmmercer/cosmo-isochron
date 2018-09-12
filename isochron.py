@@ -126,11 +126,11 @@ def extractData(ds,indexes=[0,1,2,3,4],selcol=None,selval=None,exclude=None):
       if ds.index[pidx[i]] not in exclude:
         idx.append(pidx[i])
   # Extract data.
-  x = ds.iloc[idx,indexes[0]].as_matrix()
-  sx = ds.iloc[idx,indexes[1]].as_matrix()
-  y = ds.iloc[idx,indexes[2]].as_matrix()
-  sy = ds.iloc[idx,indexes[3]].as_matrix()
-  rho = ds.iloc[idx,indexes[4]].as_matrix()
+  x = ds.iloc[idx,indexes[0]]
+  sx = ds.iloc[idx,indexes[1]]
+  y = ds.iloc[idx,indexes[2]]
+  sy = ds.iloc[idx,indexes[3]]
+  rho = ds.iloc[idx,indexes[4]]
   ids = list(ds.index[idx])
   return [x,sx,y,sy,rho,ids]
 
@@ -142,7 +142,7 @@ def initPlot():
   '''
   # Prepare to plot the data.
   fig = p.figure(1)
-  p.hold(True)
+  #p.hold(True)
   ax = p.gca()
   zid = 1
   return (ax, zid, fig)
