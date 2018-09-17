@@ -1,8 +1,8 @@
 # isochron v0.0
 #
 # PURPOSE:
-#   Python script to plot a nice isochron with a York regression. More flexible and
-#   interactive than plotIsochron script.
+#   Python library to plot a nice isochron with a York regression. More flexible and
+#   interactive than plotIsochron script. Does not compute 40Ar/39Ar ages.
 #
 # AUTHOR:
 #   Cameron M. Mercer
@@ -33,7 +33,9 @@ mpl.rcParams['ytick.major.width'] = 1
 def process(path,delim='\t',idx_col=0,indexes=[0,1,2,3,4],selcol=None,selval=None,exclude=None,run_oli=True,
             xlimits=None,ylimits=None,cutoff=4.0):
   '''
-  Reads the data from the specified file, runs a York regression, and plots the data.
+  Reads the data from the specified file, runs a York regression, and plots the data. This is an 
+  example of how to chain functions from the library together, and not a fully optioned replacement
+  for using the library functions in homebrewed scripts or the command line.
 
   Arguments:
   - path    - The path to the datafile.
@@ -126,11 +128,11 @@ def extractData(ds,indexes=[0,1,2,3,4],selcol=None,selval=None,exclude=None):
       if ds.index[pidx[i]] not in exclude:
         idx.append(pidx[i])
   # Extract data.
-  x = ds.iloc[idx,indexes[0]]
-  sx = ds.iloc[idx,indexes[1]]
-  y = ds.iloc[idx,indexes[2]]
-  sy = ds.iloc[idx,indexes[3]]
-  rho = ds.iloc[idx,indexes[4]]
+  x = ds.iloc[idx,indexes[0]].values
+  sx = ds.iloc[idx,indexes[1]].values
+  y = ds.iloc[idx,indexes[2]].values
+  sy = ds.iloc[idx,indexes[3]].values
+  rho = ds.iloc[idx,indexes[4]].values
   ids = list(ds.index[idx])
   return [x,sx,y,sy,rho,ids]
 
@@ -393,7 +395,7 @@ def mswd_2d(x,sx,y,sy,rho,a,b):
   mswd = 0
   terms = np.zeros(n)
   for i in range(n):
-    terms[i] = (y[i] - a - b*x[i])**2/(sy[i]**2 + (b*sx[i])**2 - 2*a*rho[i]*sx[i]*sy[i])
+    terms[i] = (y[i] - a - b*x[i])**2/(sy[i]**2 + (b*sx[i])**2 - 2*b*rho[i]*sx[i]*sy[i])
   mswd = sum(terms)/(n-2)
   return (mswd,np.sqrt(2.0/(n-2)))
 
@@ -453,8 +455,9 @@ def hampel(values,cutoff=4.0):
   return idx
 
 # --------------------------------------------------------------------------------
-# Quick bootstrap function for 61015 and 60315 cosmochron search.
+# Some half-baked scripts built by Cameron for some of Cameron's samples. Use at your own risk.
 
+# Quick bootstrap function for 61015 and 60315 cosmochron search.
 def bootstrap_cosmochron(path,rej=[],level=2):
   # This method assumes the data are sorted in descending order of uncertainty in 37/36.
   solar = 0.187
