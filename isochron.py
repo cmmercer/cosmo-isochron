@@ -1,8 +1,8 @@
-# isochron v0.0
+# isochron.py
 #
 # PURPOSE:
 #   Python library to plot a nice isochron with a York regression. More flexible and
-#   interactive than plotIsochron script. Does not compute 40Ar/39Ar ages.
+#   interactive than original plotIsochron script. Does not compute 40Ar/39Ar ages (yet).
 #
 # AUTHOR:
 #   Cameron M. Mercer
@@ -144,7 +144,6 @@ def initPlot():
   '''
   # Prepare to plot the data.
   fig = p.figure(1)
-  #p.hold(True)
   ax = p.gca()
   zid = 1
   return (ax, zid, fig)
@@ -453,54 +452,3 @@ def hampel(values,cutoff=4.0):
     if oli[i] > cutoff:
       idx.append(i)
   return idx
-
-# --------------------------------------------------------------------------------
-# Some half-baked scripts built by Cameron for some of Cameron's samples. Use at your own risk.
-
-# Quick bootstrap function for 61015 and 60315 cosmochron search.
-def bootstrap_cosmochron(path,rej=[],level=2):
-  # This method assumes the data are sorted in descending order of uncertainty in 37/36.
-  solar = 0.187
-  ds = loadDataset(path)
-  pd = extractData(ds,exclude=rej)
-  res = yorkRegression(pd)
-  count = 0
-  limit = len(ds) - 1
-  while abs(res[0] - solar) > level*res[1]:
-    rej.append(pd[5][0])
-    pd = extractData(ds,exclude=rej)
-    res = yorkRegression(pd)
-    count += 1
-    if count == limit:
-      break
-  (ax,zid,fig) = initPlot()
-  p.ylim([0,2]); p.xlim([0,5000])
-  zid = plotRegression(ax,res[0],res[2],zid)
-  zid = plotEnvelope(ax,res[0],res[1],res[2],res[3],zid,level=1)
-  zid = plotEnvelope(ax,res[0],res[1],res[2],res[3],zid)
-  zid = plotData(ax,pd,zid)
-  print_stats(pd,res)
-
-def bootstrap_isochron(path,rej=[],level=2):
-  # This method assumes the data are sorted in descending order of uncertainty in 39/36.
-  solar = 1
-  ds = loadDataset(path)
-  pd = extractData(ds,exclude=rej)
-  res = yorkRegression(pd)
-  count = 0
-  limit = len(ds) - 1
-  while abs(res[0] - solar) > level*res[1]:
-    rej.append(pd[5][0])
-    pd = extractData(ds,exclude=rej)
-    res = yorkRegression(pd)
-    count += 1
-    if count == limit:
-      break
-  (ax,zid,fig) = initPlot()
-  p.ylim([0,400000]); p.xlim([0,1640])
-  zid = plotRegression(ax,res[0],res[2],zid)
-  zid = plotEnvelope(ax,res[0],res[1],res[2],res[3],zid)
-  zid = plotData(ax,pd,zid)
-  print_stats(pd,res)
-  for idi in pd[5]:
-    print(idi)
