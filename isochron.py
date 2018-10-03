@@ -31,7 +31,8 @@ import numpy as np             #Import math functions.
 import numpy.random as r
 import pandas as pd
 import sys, csv
-from scipy.stats import norm
+import scipy.stats as stats
+import pint
 from matplotlib.patches import Ellipse
 # Make text labels text boxes rather than character paths.
 mpl.rcParams['pdf.fonttype'] = 'truetype'
@@ -43,6 +44,23 @@ mpl.rcParams['xtick.major.size'] = 6
 mpl.rcParams['xtick.major.width'] = 1
 mpl.rcParams['ytick.major.size'] = 6
 mpl.rcParams['ytick.major.width'] = 1
+
+# 40K decay constants.
+ur = pint.UnitRegistry()
+ur.load_definitions('geochron_units')
+kdc = {'SJ77':{'Ref':'Steiger and Jager, 1977',
+               'L_eps':ur('0.581e-10 1/a'),
+               'L_eps 1SD':ur('0.00581e-10 1/a'),
+               'L_beta':ur('4.962e-10 1/a'),
+               'L_beta 1SD':ur('0.04962e-10 1/a'),
+               'Notes':'Uncertainties assumed to be 1%.'},
+       'Ren11':{'Ref':'Renne et al., 2011',
+                'L_eps':ur('0.5757e-10 1/a'),
+                'L_eps 1SD':ur('0.0016e-10 1/a'),
+                'L_beta':ur('4.9548e-10 1/a'),
+                'L_beta':ur('0.0134e-10 1/a'),
+                'Notes':'Beware covariance with U decay constants. Apparently low-balled estimates of zircon residence times.'}}
+
 
 # process function.
 def process(path,delim='\t',idx_col=0,indexes=[0,1,2,3,4],selcol=None,selval=None,exclude=None,run_oli=True,
@@ -149,7 +167,8 @@ def extractData(ds,indexes=[0,1,2,3,4],selcol=None,selval=None,exclude=None):
   sy = ds.iloc[idx,indexes[3]].values
   rho = ds.iloc[idx,indexes[4]].values
   ids = list(ds.index[idx])
-  return [x,sx,y,sy,rho,ids]
+  labels = [ds.columns[indexes[0]],ds.columns[indexes[1]]]
+  return [x,sx,y,sy,rho,ids,labels]
 
 # Returns: (ax, zid, fig)
 def initPlot():
@@ -361,16 +380,42 @@ def iterativeSolver(x,y,wX,wY,rho,b):
 # --------------------------------------------------------------------------------
 # Descriptive statistics functions.
 
-def print_stats(data,reg_results):
+def print_stats(data,reg_results,conf=0.95,mswd_conf=0.95):
   '''
-  Displays the specified regression results with some descriptive statistics.
+  Displays the specified regression results with some descriptive statistics. Note, if the
+  value of the MSWD is higher than the upper confidence bound, confidence boundary uncertainties
+  for the slope and intercept will be expanded by sqrt(MSWD) (as well as multiplied by a
+  Student's t multiplier to achieve the specified confidence level).
+
+  Arguments:
+  - data        - The data being described.
+  - reg_results - The regression results for the data.
+  - conf        - Confidence level at which to display regression results. Default = 95%.
+  - mswd_conf   - Confidence level for mswd acceptable bounds. Default = 95%.
   '''
+  # Compute statistics.
   (x,sx,y,sy,rho) = unpackData(data,5)
+  n, half_tail = len(x), (1.0 - conf)/2.0
+  tcrit = stats.t.ppf(1.0 - half_tail,n-2)
   a,sa,b,sb = reg_results[0], reg_results[1], reg_results[2], reg_results[3]
-  (mswd,smswd) = mswd_2d(x,sx,y,sy,rho,a,b)
+  (mswd,smswd,mswd_ci) = mswd_2d(x,sx,y,sy,rho,a,b,mswd_conf)
+  ci_a, ci_b = tcrit*sa, tcrit*sb
+  expanded = ''
+  if mswd > mswd_ci[1]:
+    expanded = ' Exp.'
+    ci_a, ci_b = ci_a*np.sqrt(mswd), ci_b*np.sqrt(mswd)
   r2 = calc_r2(x,y)
-  print('{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}'.format('a','sa','b','sb','mswd','1s mswd','r2','n'))
-  print('{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:10d}'.format(a,sa,b,sb,mswd,smswd,r2,len(x)))
+  # Prepare confidence level labels.
+  ci_int = 'sa ({:.0f}%{:})'.format(conf*100,expanded)
+  ci_slope = 'sb ({:.0f}%{:})'.format(conf*100,expanded)
+  ci_mswd_lo = 'mswd lo {:.0f}%'.format(mswd_conf*100)
+  ci_mswd_hi = 'mswd hi {:.0f}%'.format(mswd_conf*100)
+  # Display results.
+  print('\nLinear Regression Results (y = a + bx):\n')
+  print('{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}'.format('a','1SD a',ci_int,'b','1SD b',ci_slope))
+  print('{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\n'.format(a,sa,ci_a,b,sb,ci_b))
+  print('{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}'.format('mswd','1SD mswd',ci_mswd_lo,ci_mswd_hi,'r2','N'))
+  print('{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:10d}\n'.format(mswd,smswd,mswd_ci[0],mswd_ci[1],r2,n))
 
 def calc_r2(x,y):
   '''
@@ -387,7 +432,7 @@ def calc_r2(x,y):
     sxy += (x[i] - xm)*(y[i] - ym)
   return (sxy/np.sqrt(sxx*syy))**2
 
-def mswd_2d(x,sx,y,sy,rho,a,b):
+def mswd_2d(x,sx,y,sy,rho,a,b,conf=.95):
   '''
   Determines the MSWD for a line with intercept a and slope b that was fit to the
   specified data (x,sx,y,sy).
@@ -396,9 +441,13 @@ def mswd_2d(x,sx,y,sy,rho,a,b):
   - x, sx - Data and uncertainties on the abscissa.
   - y, sy - Data and uncertainties on the ordinate.
   - rho   - Error correlation coefficients for data points.
-  - a, b  - intercept and slope of the best fit line, y = a + bx.
+  - a, b  - Intercept and slope of the best fit line, y = a + bx.
+  - conf  - Confidence level (expressed on the interval (0,1)) to return for the MSWD.
+            This method passes conf to the mswd_2d_conf method.
 
-  Returns: (mswd, smswd)
+  Returns: (mswd, smswd, conf_mswd)
+  Note: conf_mswd is a two element numpy array with the lower [0] and upper [1] bounds
+  of the 2D mswd, as determined using the mswd_2d_conf method.
   '''
   # Check inputs.
   if len(x) != len(sx) or len(x) != len(y) or len(x) != len(sy) or len(x) != len(rho):
@@ -411,7 +460,21 @@ def mswd_2d(x,sx,y,sy,rho,a,b):
   for i in range(n):
     terms[i] = (y[i] - a - b*x[i])**2/(sy[i]**2 + (b*sx[i])**2 - 2*b*rho[i]*sx[i]*sy[i])
   mswd = sum(terms)/(n-2)
-  return (mswd,np.sqrt(2.0/(n-2)))
+  ci = mswd_2d_conf(n-2,conf)
+  return (mswd,np.sqrt(2.0/(n-2)),ci)
+
+def mswd_2d_conf(dof,conf=0.95):
+  '''
+  Determines the upper and lower confidence bounds for the 2D MSWD.
+
+  Arguments:
+  - dof  - Number of degrees of freedom.
+  - conf - Confidence level (expressed on the interval (0,1)) to return for the MSWD.
+
+  Returns: [lower_bound,upper_bound] as a numpy array.
+  '''
+  half_tail = (1.0 - conf)/2.0
+  return np.array([stats.chi2.ppf(half_tail,dof),stats.chi2.ppf(1.0-half_tail,dof)])/float(dof)
 
 # --------------------------------------------------------------------------------
 # Outlier identifier(s) and related methods.
@@ -467,3 +530,81 @@ def hampel(values,cutoff=4.0):
     if oli[i] > cutoff:
       idx.append(i)
   return idx
+
+# --------------------------------------------------------------------------------
+# Age calculation function(s).
+
+def compute_date(data,reg_results,J,sJ,conf=0.95,mswd_conf=0.95,show_stats=False,
+                 isochron_type='Normal',kdc_ref='SJ77',units='Ma'):
+  '''
+  Computes a 40Ar/39Ar date from York regression results using the specified J value and
+  decay constants. This method can optionally display descriptive statistics for the
+  regression. If the value of the MSWD is higher than the upper confidence bound, the age
+  uncertainties will be expanded with a Student's t multiplier and sqrt(MSWD). Three levels
+  of error are reported for the date: analytical, internal (analytical + J uncertainty),
+  and external (internal uncertainty + decay constant uncertainty).
+
+  Arguments:
+  - data          - The extracted data set. Only quantity labels are used from this structure.
+  - reg_results   - The regression results for the data.
+  - J, sJ         - The J value and its 1SD absolute uncertainty.
+  - conf          - Confidence level at which to display regression results. Default = 95%.
+  - mswd_conf     - Confidence level for mswd acceptable bounds. Default = 95%.
+  - show_stats    - Boolean indicating whether or not to show descriptive statistics for the
+                    regression. Default = False. The computed date will always be shown.
+  - isochron_type - Type of isochron; either 'Normal' or 'Inverse'. If Normal, this method uses
+                    the slope (40Ar/39ArK) to compute the age; if Inverse, this method uses the
+                    intercept (39ArK/40Ar) to compute the age (assuming you've regressed a plot
+                    of 39ArK/40Ar versus 36Ar/40Ar). Default = Normal.
+  - kdc_ref       - Key for retrieving decay constants from the kdc dict. Default = SJ77.
+  - units         - Target units for the computed date.
+  '''
+  # Dummy check.
+  if isochron_type not in ['Normal','Inverse']:
+    print('Error: isochron_type must be either "Normal" or "Inverse"')
+    return
+  # Compute descriptive statistics.
+  (x,sx,y,sy,rho) = unpackData(data,5)
+  n, half_tail = len(x), (1.0 - conf)/2.0
+  tcrit = stats.t.ppf(1.0 - half_tail,n-2)
+  a,sa,b,sb = reg_results[0], reg_results[1], reg_results[2], reg_results[3]
+  (mswd,smswd,mswd_ci) = mswd_2d(x,sx,y,sy,rho,a,b,mswd_conf)
+  ci_a, ci_b = tcrit*sa, tcrit*sb
+  expanded = ''
+  if mswd > mswd_ci[1]:
+    expanded = ' Exp.'
+    ci_a, ci_b = ci_a*np.sqrt(mswd), ci_b*np.sqrt(mswd)
+  r2 = calc_r2(x,y)
+  # Compute total decay constant and F value (40Ar*/39ArK).
+  L_eps = kdc[kdc_ref]['L_eps'].to('1/'+units)
+  L_eps_sd = kdc[kdc_ref]['L_eps 1SD'].to('1/'+units)
+  L_beta = kdc[kdc_ref]['L_beta'].to('1/'+units)
+  L_beta_sd = kdc[kdc_ref]['L_beta 1SD'].to('1/'+units)
+  L_total = L_eps + L_beta
+  L_total_sd = np.sqrt(L_eps_sd**2 + L_beta_sd**2)
+  F, sF = reg_results[2], reg_results[3]
+  if isochron_type == 'Inverse':
+    F, sF = reg_results[0], reg_results[1]
+  # Compute partial derivatives for error propagation in age equation.
+  dt_dF = 1.0/L_total.magnitude*J/(J*F + 1.0)
+  dt_dJ = 1.0/L_total.magnitude*F/(J*F + 1.0)
+  dt_dL = -1.0/L_total.magnitude**2*np.log(J*F + 1.0)
+  # Compute age and uncertainties.
+  t = 1.0/L_total*np.log(J*F + 1.0)
+  st = dt_dF*sF
+  s_analytical = tcrit*st
+  s_internal = tcrit*np.sqrt(dt_dF**2*sF**2 + dt_dJ**2*sJ**2)
+  s_external = tcrit*np.sqrt(dt_dF**2*sF**2 + dt_dJ**2*sJ**2 + dt_dL**2*L_total_sd.magnitude**2)
+  # Expand results if needed.
+  if mswd > mswd_ci[1]:
+    s_analytical *= np.sqrt(mswd)
+    s_internal *= np.sqrt(mswd)
+    s_external *= np.sqrt(mswd)
+  # Print results.
+  if show_stats:
+    print_stats(data,reg_results,conf,mswd_conf)
+  print('{:>16s}\t{:>16s}\t{:>16s}\t{:>16s}\t{:>16s}'.format('Age ({:})'.format(units),'1SD ({:})'.format(units),
+                                                             'CI {:.0f}% ({:}){:}'.format(conf*100,units,expanded),
+                                                             'CI {:.0f}% Int ({:}){:}'.format(conf*100,units,expanded),
+                                                             'CI {:.0f}% Ext ({:}){:}'.format(conf*100,units,expanded)))
+  print('{:16.8e}\t{:16.8e}\t{:16.8e}\t{:16.8e}\t{:16.8e}\n'.format(t.magnitude,st,s_analytical,s_internal,s_external))

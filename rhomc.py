@@ -57,19 +57,23 @@ def process(path,delim='\t',idx_col=0,val_idx=[0,2,4],unc_idx=[1,3,5],popsize=2*
   sx = np.array(x*np.sqrt(a[1]**2/a[0]**2 + c[1]**2/c[0]**2))
   y = np.array(b[0]/c[0])
   sy = np.array(y*np.sqrt(b[1]**2/b[0]**2 + c[1]**2/c[0]**2))
+  xlbl = 'x ({:}/{:})'.format(ds.columns[val_idx[0]],ds.columns[val_idx[2]])
+  sxlbl = 'sx ({:}/{:})'.format(ds.columns[val_idx[0]],ds.columns[val_idx[2]])
+  ylbl = 'y ({:}/{:})'.format(ds.columns[val_idx[1]],ds.columns[val_idx[2]])
+  sylbl = 'sy ({:}/{:})'.format(ds.columns[val_idx[1]],ds.columns[val_idx[2]])
   # Compute rho analytically and save file.
   rho_vals = np.zeros(n,)
   rho_vals_mc = np.zeros(n,)
   for i in range(n):
     rho_vals[i] = rho(a[0][i],a[1][i],b[0][i],b[1][i],c[0][i],c[1][i])
-  analytical = pd.DataFrame(data={'x':x,'sx':sx,'y':y,'sy':sy,'rho':rho_vals},index=ds.index)
+  analytical = pd.DataFrame(data={xlbl:x,sxlbl:sx,ylbl:y,sylbl:sy,'rho':rho_vals},index=ds.index)
   analytical = pd.concat([analytical,ds.iloc[:,ancillary]],axis='columns',sort=False)
   analytical.to_csv(out,'\t')
   # Compute rho by Monte Carlo and save file.
   for i in range(n):
     rho_vals_mc[i] = rho_mc(a[0][i],a[1][i],b[0][i],b[1][i],c[0][i],c[1][i],popsize)
     show_progress('Computing rho values by MC',i,n)
-  montecarlo = pd.DataFrame({'x':x,'sx':sx,'y':y,'sy':sy,'rho':rho_vals},index=ds.index)
+  montecarlo = pd.DataFrame({xlbl:x,sxlbl:sx,ylbl:y,sylbl:sy,'rho':rho_vals},index=ds.index)
   montecarlo = pd.concat([montecarlo,ds.iloc[:,ancillary]],axis='columns',sort=False)
   montecarlo.to_csv(out_mc,'\t')
 
