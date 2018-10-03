@@ -593,7 +593,8 @@ def compute_date(data,reg_results,J,sJ,conf=0.95,mswd_conf=0.95,show_stats=False
   t = 1.0/L_total*np.log(J*F + 1.0)
   st = dt_dF*sF
   s_analytical = tcrit*st
-  s_internal = tcrit*np.sqrt(dt_dF**2*sF**2 + dt_dJ**2*sJ**2)
+  st_int = np.sqrt(dt_dF**2*sF**2 + dt_dJ**2*sJ**2)
+  s_internal = tcrit*st_int
   s_external = tcrit*np.sqrt(dt_dF**2*sF**2 + dt_dJ**2*sJ**2 + dt_dL**2*L_total_sd.magnitude**2)
   # Expand results if needed.
   if mswd > mswd_ci[1]:
@@ -603,8 +604,9 @@ def compute_date(data,reg_results,J,sJ,conf=0.95,mswd_conf=0.95,show_stats=False
   # Print results.
   if show_stats:
     print_stats(data,reg_results,conf,mswd_conf)
-  print('{:>16s}\t{:>16s}\t{:>16s}\t{:>16s}\t{:>16s}'.format('Age ({:})'.format(units),'1SD ({:})'.format(units),
-                                                             'CI {:.0f}% ({:}){:}'.format(conf*100,units,expanded),
-                                                             'CI {:.0f}% Int ({:}){:}'.format(conf*100,units,expanded),
-                                                             'CI {:.0f}% Ext ({:}){:}'.format(conf*100,units,expanded)))
-  print('{:16.8e}\t{:16.8e}\t{:16.8e}\t{:16.8e}\t{:16.8e}\n'.format(t.magnitude,st,s_analytical,s_internal,s_external))
+  print('{:>15s}\t{:>15s}\t{:>15s}\t{:>15s}\t{:>15s}\t{:>15s}'.format('Age ({:})'.format(units),'1SD ({:})'.format(units),
+                                                                      '1SD Int ({:})'.format(units),
+                                                                      'CI {:.0f}% ({:}){:}'.format(conf*100,units,expanded),
+                                                                      'CI {:.0f}% Int ({:}){:}'.format(conf*100,units,expanded),
+                                                                      'CI {:.0f}% Ext ({:}){:}'.format(conf*100,units,expanded)))
+  print('{:15.8e}\t{:15.8e}\t{:15.8e}\t{:15.8e}\t{:15.8e}\t{:15.8e}\n'.format(t.magnitude,st,st_int,s_analytical,s_internal,s_external))
