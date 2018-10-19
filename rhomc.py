@@ -29,7 +29,7 @@ import pandas as pd
 import sys, os, csv
 
 # process function.
-def process(path,delim='\t',idx_col=0,val_idx=[0,2,4],unc_idx=[1,3,5],popsize=2**16):
+def process(path,delim='\t',idx_col=0,val_idx=[0,2,4],unc_idx=[1,3,5],popsize=2**16,run_mc=False):
   '''
   Quick function to compute rho values using data from the specified file. This function saves
   two output files with the same base name as the input file and the extensions '*_rho.txt'
@@ -69,13 +69,14 @@ def process(path,delim='\t',idx_col=0,val_idx=[0,2,4],unc_idx=[1,3,5],popsize=2*
   analytical = pd.DataFrame(data={xlbl:x,sxlbl:sx,ylbl:y,sylbl:sy,'rho':rho_vals},index=ds.index)
   analytical = pd.concat([analytical,ds.iloc[:,ancillary]],axis='columns',sort=False)
   analytical.to_csv(out,'\t')
-  # Compute rho by Monte Carlo and save file.
-  for i in range(n):
-    rho_vals_mc[i] = rho_mc(a[0][i],a[1][i],b[0][i],b[1][i],c[0][i],c[1][i],popsize)
-    show_progress('Computing rho values by MC',i,n)
-  montecarlo = pd.DataFrame({xlbl:x,sxlbl:sx,ylbl:y,sylbl:sy,'rho':rho_vals},index=ds.index)
-  montecarlo = pd.concat([montecarlo,ds.iloc[:,ancillary]],axis='columns',sort=False)
-  montecarlo.to_csv(out_mc,'\t')
+  # Compute rho by Monte Carlo and save file, if desired.
+  if run_mc:
+    for i in range(n):
+      rho_vals_mc[i] = rho_mc(a[0][i],a[1][i],b[0][i],b[1][i],c[0][i],c[1][i],popsize)
+      show_progress('Computing rho values by MC',i,n)
+    montecarlo = pd.DataFrame({xlbl:x,sxlbl:sx,ylbl:y,sylbl:sy,'rho':rho_vals},index=ds.index)
+    montecarlo = pd.concat([montecarlo,ds.iloc[:,ancillary]],axis='columns',sort=False)
+    montecarlo.to_csv(out_mc,'\t')
 
 # load_data function.
 def load_data(path,delim='\t',idx_col=0):
