@@ -535,7 +535,7 @@ def hampel(values,cutoff=4.0):
 # Age calculation function(s).
 
 def compute_date(data,reg_results,J,sJ,conf=0.95,mswd_conf=0.95,show_stats=False,
-                 isochron_type='Normal',kdc_ref='SJ77',units='Ma'):
+                 isochron_type='Normal',kdc_ref='SJ77',units='Ma',suppress_expansion=False):
   '''
   Computes a 40Ar/39Ar date from York regression results using the specified J value and
   decay constants. This method can optionally display descriptive statistics for the
@@ -571,7 +571,7 @@ def compute_date(data,reg_results,J,sJ,conf=0.95,mswd_conf=0.95,show_stats=False
   (mswd,smswd,mswd_ci) = mswd_2d(x,sx,y,sy,rho,a,b,mswd_conf)
   ci_a, ci_b = tcrit*sa, tcrit*sb
   expanded = ''
-  if mswd > mswd_ci[1]:
+  if mswd > mswd_ci[1] and suppress_expansion == False:
     expanded = ' Exp.'
     ci_a, ci_b = ci_a*np.sqrt(mswd), ci_b*np.sqrt(mswd)
   r2 = calc_r2(x,y)
@@ -598,7 +598,7 @@ def compute_date(data,reg_results,J,sJ,conf=0.95,mswd_conf=0.95,show_stats=False
   s_internal = tcrit*np.sqrt(dt_dF**2*sF**2 + dt_dJ**2*sJ**2)
   s_external = tcrit*np.sqrt(dt_dF**2*sF**2 + dt_dJ**2*sJ**2 + dt_dL**2*L_total_sd.magnitude**2)
   # Expand results if needed.
-  if mswd > mswd_ci[1]:
+  if mswd > mswd_ci[1] and suppress_expansion == False:
     s_analytical *= np.sqrt(mswd)
     s_internal *= np.sqrt(mswd)
     s_external *= np.sqrt(mswd)
