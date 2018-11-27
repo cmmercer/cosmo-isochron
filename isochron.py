@@ -58,7 +58,7 @@ kdc = {'SJ77':{'Ref':'Steiger and Jager, 1977',
                 'L_eps':ur('0.5757e-10 1/a'),
                 'L_eps 1SD':ur('0.0016e-10 1/a'),
                 'L_beta':ur('4.9548e-10 1/a'),
-                'L_beta':ur('0.0134e-10 1/a'),
+                'L_beta 1SD':ur('0.0134e-10 1/a'),
                 'Notes':'Beware covariance with U decay constants. Apparently low-balled estimates of zircon residence times.'}}
 
 
@@ -584,7 +584,9 @@ def compute_date(data,reg_results,J,sJ,conf=0.95,mswd_conf=0.95,show_stats=False
   L_total_sd = np.sqrt(L_eps_sd**2 + L_beta_sd**2)
   F, sF = reg_results[2], reg_results[3]
   if isochron_type == 'Inverse':
-    F, sF = reg_results[0], reg_results[1]
+    # Compute F = 40Ar*/39ArK from the 39Ar/40Ar intercept value.
+    F = 1.0/reg_results[0]
+    sF = F*reg_results[1]/reg_results[0]
   # Compute partial derivatives for error propagation in age equation.
   dt_dF = 1.0/L_total.magnitude*J/(J*F + 1.0)
   dt_dJ = 1.0/L_total.magnitude*F/(J*F + 1.0)
