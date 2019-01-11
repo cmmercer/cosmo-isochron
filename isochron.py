@@ -32,6 +32,7 @@ import numpy.random as r
 import pandas as pd
 import sys, csv
 import scipy.stats as stats
+import scipy.special as special
 import pint
 from matplotlib.patches import Ellipse
 # Make text labels text boxes rather than character paths.
@@ -399,6 +400,13 @@ def print_stats(data,reg_results,conf=0.95,mswd_conf=0.95):
   tcrit = stats.t.ppf(1.0 - half_tail,n-2)
   a,sa,b,sb = reg_results[0], reg_results[1], reg_results[2], reg_results[3]
   (mswd,smswd,mswd_ci) = mswd_2d(x,sx,y,sy,rho,a,b,mswd_conf)
+  pval = mswd_pval(mswd,n-2)
+  if pval > 1e-3:
+    pval = '{:0.4e}'.format(pval)
+  elif pval < 1e-3 and pval > 1e-4:
+    pval = '< 0.001'
+  else:
+    pval = '<< 0.001'
   ci_a, ci_b = tcrit*sa, tcrit*sb
   expanded = ''
   if mswd > mswd_ci[1]:
@@ -414,8 +422,8 @@ def print_stats(data,reg_results,conf=0.95,mswd_conf=0.95):
   print('\nLinear Regression Results (y = a + bx):\n')
   print('{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}'.format('a','1SD a',ci_int,'b','1SD b',ci_slope))
   print('{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\n'.format(a,sa,ci_a,b,sb,ci_b))
-  print('{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}'.format('mswd','1SD mswd',ci_mswd_lo,ci_mswd_hi,'r2','N'))
-  print('{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:10d}\n'.format(mswd,smswd,mswd_ci[0],mswd_ci[1],r2,n))
+  print('{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>10s}\t{:>7s}'.format('mswd','1SD mswd',ci_mswd_lo,ci_mswd_hi,'r2','N','P-value'))
+  print('{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:.8e}\t{:10d}\t{:}\n'.format(mswd,smswd,mswd_ci[0],mswd_ci[1],r2,n,pval))
 
 def calc_r2(x,y):
   '''
@@ -475,6 +483,94 @@ def mswd_2d_conf(dof,conf=0.95):
   '''
   half_tail = (1.0 - conf)/2.0
   return np.array([stats.chi2.ppf(half_tail,dof),stats.chi2.ppf(1.0-half_tail,dof)])/float(dof)
+
+# ----------------------------------------
+# MSWD P-value function(s).
+
+# Returns the p-value for the MSWD.
+def mswd_pval(x,dof):
+  return 1.0 - mswd_cdf(x,dof)
+
+# mswd_cdf method.
+def mswd_cdf(x,dof):
+  '''
+  Computes the cumulative distribution function for the specified MSWD value (input x).
+
+  For odd degrees of freedom (dof), the wc_erf function is called.
+  '''
+  if isinstance(x,list):
+    x = np.array(x)
+  dof = int(dof)
+  halff = dof/2
+  summ = 0.0
+  prob = []
+  if dof%2 == 0:
+    # Note; have to add 1 to ends of ranges to get inclusive values.
+    for i in range(0,int(halff - 1) + 1):
+      summ += halff**i/special.factorial(i)*x**i
+    prob = 1.0 - np.exp(-halff*x)*summ
+  else:
+    # Note; have to add 1 to ends of ranges to get inclusive values.
+    for i in range(1,int((dof - 1)/2) + 1):
+      summ += (dof**(i-1)*2**i*special.factorial(i))/special.factorial(2*i)*x**(i-0.5)
+    if isinstance(x,np.ndarray):
+      prob = np.zeros(len(x))
+      for i in range(len(x)):
+        prob[i] = 2.0*(wc_erf(np.sqrt(dof*x[i])) - np.sqrt(dof/(2.0*np.pi))*np.exp(-halff*x[i])*summ[i])
+    else:
+      prob = 2.0*(wc_erf(np.sqrt(dof*x)) - np.sqrt(dof/(2.0*np.pi))*np.exp(-halff*x)*summ)
+  # Return cumulative probability.
+  return prob
+
+# wc_erf method.
+def wc_erf(x):
+  '''
+  Special case error function defined in Wendt and Carl (1991), Equation 11.
+  This appears to be similar to the standard normal CDF, but the lower integration
+  limit starts at zero rather than negative infinity. In Mathematica notation:
+
+  wc_erf(x) = (2*pi)^(-1/2)*Integral[Exp[-z^2/2],z=[0,x]]
+
+  This method solves this equation using Simpson's Rule.
+  [Post Note]: After testing, it appears this method is equivalent to calling:
+  
+  >> scipy.special.erf(x/numpy.sqrt(2))/2.0
+  '''
+  x = float(x)
+  n = int(2)          # Number of integration intervals (will change as loop progresses)
+  exit_flag = False   # Exit flag for while loop.
+  tol = 1e-9          # Convergence tolerance
+  prev = 0.0          # Value of previous result (n/2 intervals)
+  curr = 0.0          # Value of current result (n intervals)
+  # Perform integration; will apply prefactor later.
+  while exit_flag == False:
+    # Determine interval width.
+    h = x/float(n)
+    curr = 0.0
+    for i in range(2,n+1):
+      if i%2 == 0:
+        # Even interior integration point; add 4*f(t), where f(t) = exp(-t**2/2.0).
+        curr += 4.0*np.exp(-(h*(i-1.0))**2/2.0)
+      else:
+        # Odd interior integration point; add 2*f(t), where f(t) = exp(-t**2/2.0).
+        curr += 2.0*np.exp(-(h*(i-1.0))**2/2.0)
+    # Calculate the full value of the integral using the formula: h/3.0*(f(a) + f(b) + curr).
+    # Note: f(a = 0.0) = exp(-0.0/2.0) = 1.
+    curr = h/3.0*(1.0 + np.exp(-x**2/2.0) + curr)
+    # Check exit conditions.
+    if n == 2:
+      # First iteration, continue loop.
+      prev = curr;
+      n *= 2
+    elif n > 2:
+      # Check if we have converged.
+      if abs(curr - prev) < tol:
+        exit_flag = True
+      else:
+        prev = curr;
+        n *= 2
+  # Return value.
+  return 1.0/np.sqrt(2.0*np.pi)*curr
 
 # --------------------------------------------------------------------------------
 # Outlier identifier(s) and related methods.
