@@ -401,8 +401,10 @@ def print_stats(data,reg_results,conf=0.95,mswd_conf=0.95):
   a,sa,b,sb = reg_results[0], reg_results[1], reg_results[2], reg_results[3]
   (mswd,smswd,mswd_ci) = mswd_2d(x,sx,y,sy,rho,a,b,mswd_conf)
   pval = mswd_pval(mswd,n-2)
-  if pval > 1e-3:
-    pval = '{:0.4e}'.format(pval)
+  if pval > 1e-2:
+    pval = '{:0.4f}'.format(pval)
+  elif pval < 1e-2 and pval > 1e-3:
+    pval = '< 0.01'
   elif pval < 1e-3 and pval > 1e-4:
     pval = '< 0.001'
   else:
@@ -487,14 +489,85 @@ def mswd_2d_conf(dof,conf=0.95):
 # ----------------------------------------
 # MSWD P-value function(s).
 
+# Binary search of MSWD method.
+def mswd_pdf_search(rho,dof,side='left',eps=1e-6):
+  '''
+  Performs a binary search for the MSWD quantile that yields the specified density (rho).
+  The search may be performed in the 'left' or 'right' sides of the distribution. Note, the
+  maximum value of the MSWD distribution is given by 1-2/dof. Thus, a left search occurs on
+  the interval [0,1-2/dof], while a right search occurs on [1-2/dof,1000]. If the dof == 2,
+  the search interval is [0,1000] (since the entire distribution is monotonic).
+
+  Arguments:
+  - rho  - target probability density for which to find a quantile.
+  - dof  - degrees of freedom
+  - side - must be 'left' or 'right'; default is 'left'
+  - eps  - search tolerance; default is 1e-6.
+  '''
+  # Set up search bounds.
+  lo, hi = [], []
+  if dof > 2:
+    if side == 'left':
+      lo, hi = 0.0, 1.0 - 2.0/dof
+    elif side == 'right':
+      lo, hi = 1.0 - 2.0/dof, 1000.0
+    else:
+      print('ERROR: side must be "left" or "right".')
+      return
+  elif dof == 2:
+    side = 'right'
+    lo, hi = 0.0, 1000.0
+  else:
+    print('ERROR: must have dof >= 2.')
+  mid = (lo + hi)/2.0
+  # Perform search.
+  density = mswd_pdf(mid,dof)
+  count = 0
+  while abs(rho - density) > eps:
+    count += 1
+    if side == 'left':
+      if density > rho:
+        hi = mid
+      else:
+        lo = mid
+    else:
+      if density > rho:
+        lo = mid
+      else:
+        hi = mid
+    mid = (lo + hi)/2.0
+    density = mswd_pdf(mid,dof)
+  return mid, count
+
 # Returns the p-value for the MSWD.
 def mswd_pval(x,dof):
-  return 1.0 - mswd_cdf(x,dof)
+  '''
+  Returns the two-tailed asymmetric p-value (outer tail areas) for the MSWD. This method
+  identifies the left tail as the area left of the quantile with the same probability
+  density as the specified MSWD value (x).
+  '''
+  density = mswd_pdf(x,dof)
+  lox = mswd_pdf_search(density,dof,side='left')[0]
+  left_tail = mswd_cdf(lox,dof)
+  right_tail = 1.0 - mswd_cdf(x,dof)
+  return left_tail + right_tail
+
+# mswd_pdf method.
+def mswd_pdf(x,dof):
+  halff = dof/2.0
+  numerator = x**(halff - 1.0)*np.exp(-halff*x)
+  norm = []
+  if dof%2 == 0:
+    norm = halff**halff/special.factorial(halff - 1.0)
+  else:
+    norm = 2**((dof-1)/2.0)*(dof**((dof-1)/2.0)*special.factorial(int((dof-1)/2)))/(special.factorial(dof-1))*np.sqrt(halff*np.pi)
+  return norm*numerator
 
 # mswd_cdf method.
 def mswd_cdf(x,dof):
   '''
   Computes the cumulative distribution function for the specified MSWD value (input x).
+  See Wendt and Carl, (1991). Chemical Geology, 86, pp. 275-285.
 
   For odd degrees of freedom (dof), the wc_erf function is called.
   '''
@@ -532,6 +605,7 @@ def wc_erf(x):
   wc_erf(x) = (2*pi)^(-1/2)*Integral[Exp[-z^2/2],z=[0,x]]
 
   This method solves this equation using Simpson's Rule.
+  See Wendt and Carl, (1991). Chemical Geology, 86, pp. 275-285.
   [Post Note]: After testing, it appears this method is equivalent to calling:
   
   >> scipy.special.erf(x/numpy.sqrt(2))/2.0
@@ -659,6 +733,8 @@ def compute_date(data,reg_results,J,sJ,conf=0.95,mswd_conf=0.95,show_stats=False
   if isochron_type not in ['Normal','Inverse']:
     print('Error: isochron_type must be either "Normal" or "Inverse"')
     return
+  # Report decay constants.
+  print('Decay constants: {:}'.format(kdc[kdc_ref]['Ref']))
   # Compute descriptive statistics.
   (x,sx,y,sy,rho) = unpackData(data,5)
   n, half_tail = len(x), (1.0 - conf)/2.0
