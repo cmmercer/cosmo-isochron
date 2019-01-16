@@ -487,7 +487,7 @@ def mswd_2d_conf(dof,conf=0.95):
   return np.array([stats.chi2.ppf(half_tail,dof),stats.chi2.ppf(1.0-half_tail,dof)])/float(dof)
 
 # ----------------------------------------
-# MSWD P-value function(s).
+# MSWD PDF, CDF, and P-value function(s).
 
 # Binary search of MSWD method.
 def mswd_pdf_search(rho,dof,side='left',eps=1e-6):
@@ -495,8 +495,8 @@ def mswd_pdf_search(rho,dof,side='left',eps=1e-6):
   Performs a binary search for the MSWD quantile that yields the specified density (rho).
   The search may be performed in the 'left' or 'right' sides of the distribution. Note, the
   maximum value of the MSWD distribution is given by 1-2/dof. Thus, a left search occurs on
-  the interval [0,1-2/dof], while a right search occurs on [1-2/dof,1000]. If the dof == 2,
-  the search interval is [0,1000] (since the entire distribution is monotonic).
+  the interval [0,1-2/dof], while a right search occurs on [1-2/dof,1000]. If the dof == 1
+  or dof == 2, the search interval is [0,1000] (since the entire distribution is monotonic).
 
   Arguments:
   - rho  - target probability density for which to find a quantile.
@@ -514,11 +514,11 @@ def mswd_pdf_search(rho,dof,side='left',eps=1e-6):
     else:
       print('ERROR: side must be "left" or "right".')
       return
-  elif dof == 2:
+  elif dof == 2 or dof == 1:
     side = 'right'
     lo, hi = 0.0, 1000.0
   else:
-    print('ERROR: must have dof >= 2.')
+    print('ERROR: must have dof >= 1.')
   mid = (lo + hi)/2.0
   # Perform search.
   density = mswd_pdf(mid,dof)
@@ -542,18 +542,25 @@ def mswd_pdf_search(rho,dof,side='left',eps=1e-6):
 # Returns the p-value for the MSWD.
 def mswd_pval(x,dof):
   '''
-  Returns the two-tailed asymmetric p-value (outer tail areas) for the MSWD. This method
-  identifies the left tail as the area left of the quantile with the same probability
-  density as the specified MSWD value (x).
+  Returns the two-tailed asymmetric p-value (outer tail areas) for the MSWD if dof > 2.
+  This method identifies the left tail as the area left of the quantile with the same
+  probability density as the specified MSWD value (x). If 0 < dof <= 2, this method only
+  considers the one-tailed p-value since the MSWD is monotonic for such low dof.
   '''
-  density = mswd_pdf(x,dof)
-  lox = mswd_pdf_search(density,dof,side='left')[0]
-  left_tail = mswd_cdf(lox,dof)
+  left_tail = 0.0
+  if dof > 2:
+    density = mswd_pdf(x,dof)
+    lox = mswd_pdf_search(density,dof,side='left')[0]
+    left_tail = mswd_cdf(lox,dof)
   right_tail = 1.0 - mswd_cdf(x,dof)
   return left_tail + right_tail
 
 # mswd_pdf method.
 def mswd_pdf(x,dof):
+  '''
+  The probability density function of the MSWD.
+  See Wendt and Carl, (1991). Chemical Geology, 86, pp. 275-285.
+  '''
   halff = dof/2.0
   numerator = x**(halff - 1.0)*np.exp(-halff*x)
   norm = []
